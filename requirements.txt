@@ -1,4 +1,4 @@
 datetime
 requests
 apache-airflow
-cryptography
+psycopg2-binary

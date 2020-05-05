@@ -1,21 +1,63 @@
 import requests
 from datetime import datetime, date
 from airflow import DAG
+from airflow.models import Variable
 from airflow.hooks.http_hook import HttpHook
 from airflow.hooks.postgres_hook import PostgresHook
 from airflow.exceptions import AirflowException
 
-# countries = requests.get("https://api.covid19api.com/summary").json()["Countries"]
+def retrieve_summary():
+    # Setup a hook to the API endpoint
+    http = HttpHook(method="GET", http_conn_id="covid_api")
+    aws_rds_hook = PostgresHook(postgres_conn_id="covid_aws_db", schema="postgres")
+    rds_conn = aws_rds_hook.get_conn()
 
-# for country in countries:
-#     country_name = country["Country"]
-#     new_confirmed = country["NewConfirmed"]
-#     total_confirmed = country["TotalConfirmed"]
-#     new_deaths = country["NewDeaths"]
-#     total_deaths = country["TotalDeaths"]
-#     new_recovered = country["NewRecovered"]
-#     total_recovered = country["TotalRecovered"]
-#     date = datetime.strptime(country["Date"][0:10], "%Y-%m-%d").date()
+    resp = http.run("summary")
+
+    if http.check_response(resp):
+        raise AirflowException("COVID API summary endpoint returned bad resposne")
+
+    # Global case is separate from the Countries
+    global_summary = resp.json()["Global"]
+    # Add in the Country, Slug and Date fields
+    global_summary["Country"] = "Global"
+    global_summary["Slug"] = "global"
+    global_summary["Date"] = date.today().strftime("%Y-%m-%d") + "T00:00:00Z"
+
+    # Get the countries list and add in Global
+    countries = resp.json()["Countries"]
+    countries.append(global_summary)
+
+    # Fields to be extracted from each country dictionary
+    fields = [
+        "Country", "Slug", "NewConfirmed", "TotalConfirmed", "NewDeaths",
+        "TotalDeaths", "NewRecovered", "TotalRecovered"
+    ]
+
+    data = []
+    for country in countries:
+        new_entry = []
+        # Iterate the fields to extract from the country dictionary
+        for field in fields:
+            new_entry.append(country[field])
+
+        # Date is special case since only the date needs to be extracted from datetime
+        new_entry.append(country["Date"][:10])
+        # Conver the list to tuple and add to list of data to be inserted into db
+        data.append(tuple(new_entry))
+
+    # Establish database cursor
+    cursor = rds_conn.cursor()
+    # Insert all of the data into the covid_summary_data table
+    cursor.executemany("""
+        INSERT INTO covid_summary_data
+        (country, slug, new_confirmed, total_confirmed, new_deaths, total_deaths, new_recovered, total_recovered, date)
+        VALUES(%s, %s, %s, %s, %s, %s, %s, %s, %s)
+        """, tuple(data))
+
+    rds_conn.commit()
+    rds_conn.close()
+
 
 def retrieve_countries():
     # Setup a hook to the API endpoint
@@ -58,7 +100,7 @@ def country_cases(**kwargs):
 
             # Read the latest date that
             date_file = open("../staging/last_date.txt")
-            from_date = date_file.readline()
+            from_date = Variable.get("last_date_found")
             date_file.close()
             to_date = date.today().strftime("%Y-%m-%d") + "T00:00:00Z"
             print(to_date)
@@ -84,14 +126,23 @@ def country_cases(**kwargs):
                     VALUES(%s, %s, %s, %s, %s, %s, %s, %s)
                     """, (country, latitude, longitude, confirmed, deaths, recovered, active, record_date))
                 rds_conn.commit()
-        
+
     rds_conn.close()
 
+def set_latest_date():
+    # Establish connection to AWS database
+    aws_rds_hook = PostgresHook(postgres_conn_id="covid_aws_db", schema="postgres")
+    rds_conn = aws_rds_hook.get_conn()
+    cursor = rds_conn.cursor()
+    # Query the latest record inserted and find its date
+    cursor.execute("SELECT record_date FROM country_cases ORDER BY record_date DESC LIMIT 1")
+    result = cursor.fetchone()
+    # Set the airflow variable to be used in next process
+    print(result[0].strftime('%Y-%m-%d'))
+    Variable.set('last_date_found', result[0].strftime('%Y-%m-%d'))
 
 
-
-
-
-
+retrieve_summary()
 #retrieve_countries()
-country_cases(file_num="0")
+#country_cases(file_num="0")
+#set_latest_date()

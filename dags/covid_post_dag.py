@@ -2,6 +2,7 @@ import requests
 from datetime import datetime, date
 from airflow import DAG
 from airflow.hooks.http_hook import HttpHook
+from airflow.hooks.postgres_hook import PostgresHook
 from airflow.exceptions import AirflowException
 
 # countries = requests.get("https://api.covid19api.com/summary").json()["Countries"]
@@ -48,6 +49,8 @@ def retrieve_countries():
 def country_cases(**kwargs):
     # Setup a hook to the API endpoint
     http = HttpHook(method="GET", http_conn_id="covid_api")
+    aws_rds_hook = PostgresHook(postgres_conn_id="covid_aws_db", schema="postgres")
+    rds_conn = aws_rds_hook.get_conn()
 
     with open("../staging/country" + kwargs["file_num"] + ".txt") as file:
         for line in file:
@@ -63,8 +66,30 @@ def country_cases(**kwargs):
             endpoint = "country/" + country + "?from=" + from_date + "&to=" + to_date
             resp = http.run(endpoint)
 
+            cursor = rds_conn.cursor()
             for case in resp.json():
-                print(case)
+                country = case["Country"]
+                latitude = case["Lat"]
+                longitude = case["Lon"]
+                confirmed = case["Confirmed"]
+                deaths = case["Deaths"]
+                recovered = case["Recovered"]
+                active = case["Active"]
+                record_date = case["Date"][:10]
+
+                # Insert the information found into the country_cases table
+                cursor.execute("""
+                    INSERT INTO country_cases
+                    (country, latitude, longitude, confirmed, deaths, recovered, active_cases, record_date)
+                    VALUES(%s, %s, %s, %s, %s, %s, %s, %s)
+                    """, (country, latitude, longitude, confirmed, deaths, recovered, active, record_date))
+                rds_conn.commit()
+        
+    rds_conn.close()
+
+
+
+
 
 
 

@@ -1,10 +1,29 @@
 import requests
-from datetime import datetime, date
+from datetime import datetime, date, timedelta
 from airflow import DAG
 from airflow.models import Variable
 from airflow.hooks.http_hook import HttpHook
 from airflow.hooks.postgres_hook import PostgresHook
+from airflow.operators.python_operator import PythonOperator
+from airflow.utils.dates import days_ago
 from airflow.exceptions import AirflowException
+
+args = {
+    'owner': 'simsmat',
+    'depends_on_past': False,
+    'start_date': days_ago(2),
+    'email': ['simsmat11697@gmail.com'],
+    'email_on_failure': True,
+    'retries': 2,
+    'retry_delay': timedelta(minutes=5),
+}
+
+dag = DAG(
+    dag_id="covid_dag",
+    default_args=args,
+    schedule_interval=timedelta(days=1)
+)
+
 
 def retrieve_summary():
     # Setup a hook to the API endpoint
@@ -59,6 +78,13 @@ def retrieve_summary():
     rds_conn.close()
 
 
+t1 = PythonOperator(
+    task_id="summary_api_retrieval",
+    python_callable=retrieve_summary,
+    dag=dag
+)
+
+
 def retrieve_countries():
     # Setup a hook to the API endpoint
     http = HttpHook(method='GET', http_conn_id="covid_api")
@@ -71,7 +97,7 @@ def retrieve_countries():
 
     # Iterate through each country in the response
     countries = resp.json()
-    block_size, index = len(countries) // 3 + 1, 0
+    block_size, index = len(countries) // int(Variable.get("country_splits")) + 1, 0
 
     while index < len(countries):
         # Generate the current file number for the block
@@ -87,6 +113,14 @@ def retrieve_countries():
                 file.write(country["Slug"] + "\n")
 
         index = index+block_size
+
+
+t2 = PythonOperator(
+    task_id="country_api_retrieval",
+    python_callable=retrieve_countries,
+    dag=dag
+)
+
 
 def country_cases(**kwargs):
     # Setup a hook to the API endpoint
@@ -129,6 +163,19 @@ def country_cases(**kwargs):
 
     rds_conn.close()
 
+
+tasks_3 = []
+for i in range(0, int(Variable.get("country_splits"))):
+    cases_task = PythonOperator(
+        task_id="retrieve_country_cases" + str(i),
+        python_callable=country_cases,
+        op_kwargs={ "file_num": str(i) },
+        dag=dag
+    )
+
+    tasks_3.append(cases_task)
+
+
 def set_latest_date():
     # Establish connection to AWS database
     aws_rds_hook = PostgresHook(postgres_conn_id="covid_aws_db", schema="postgres")
@@ -141,8 +188,11 @@ def set_latest_date():
     print(result[0].strftime('%Y-%m-%d'))
     Variable.set('last_date_found', result[0].strftime('%Y-%m-%d'))
 
+t4 = PythonOperator(
+    task_id="set_latest_date",
+    python_callable=set_latest_date,
+    dag=dag
+)
 
-retrieve_summary()
-#retrieve_countries()
-#country_cases(file_num="0")
-#set_latest_date()
+t1
+t2 >> tasks_3 >> t4

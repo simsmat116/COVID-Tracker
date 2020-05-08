@@ -1,3 +1,4 @@
+import os
 import requests
 from datetime import datetime, date, timedelta
 from airflow import DAG
@@ -104,10 +105,11 @@ def retrieve_countries():
         file_num = index // block_size
 
         # Erase contents of the existing file
-        open("../staging/country" + str(file_num) + ".txt", "w").close()
+        with open(os.getcwd() + "/staging/country" + str(file_num) + ".txt", "w"):
+            pass
 
         # Placing the appropriate date into the file
-        with open("../staging/country" + str(file_num) + ".txt", "a") as file:
+        with open(os.getcwd() + "/staging/country" + str(file_num) + ".txt", "a") as file:
             # Iterate the current block of countries
             for country in countries[index:min(index+block_size, len(countries))]:
                 file.write(country["Slug"] + "\n")
@@ -128,14 +130,12 @@ def country_cases(**kwargs):
     aws_rds_hook = PostgresHook(postgres_conn_id="covid_aws_db", schema="postgres")
     rds_conn = aws_rds_hook.get_conn()
 
-    with open("../staging/country" + kwargs["file_num"] + ".txt") as file:
+    with open("/staging/country" + kwargs["file_num"] + ".txt") as file:
         for line in file:
             country = line.rstrip("\n")
 
-            # Read the latest date that
-            date_file = open("../staging/last_date.txt")
+            # Read the latest date that is stored in Airflow Variable
             from_date = Variable.get("last_date_found")
-            date_file.close()
             to_date = date.today().strftime("%Y-%m-%d") + "T00:00:00Z"
             print(to_date)
             # Create the endpoint that specifies range of dates
@@ -164,7 +164,7 @@ def country_cases(**kwargs):
     rds_conn.close()
 
 
-tasks_3 = []
+parallel_tasks = []
 for i in range(0, int(Variable.get("country_splits"))):
     cases_task = PythonOperator(
         task_id="retrieve_country_cases" + str(i),
@@ -173,7 +173,7 @@ for i in range(0, int(Variable.get("country_splits"))):
         dag=dag
     )
 
-    tasks_3.append(cases_task)
+    parallel_tasks.append(cases_task)
 
 
 def set_latest_date():
@@ -195,4 +195,4 @@ t4 = PythonOperator(
 )
 
 t1
-t2 >> tasks_3 >> t4
+t2 >> parallel_tasks >> t4

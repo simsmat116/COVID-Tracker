@@ -26,7 +26,7 @@ dag = DAG(
 )
 
 
-def retrieve_summary():
+def retrieve_summary(**kwargs):
     # Setup a hook to the API endpoint
     http = HttpHook(method="GET", http_conn_id="covid_api")
     aws_rds_hook = PostgresHook(postgres_conn_id="covid_aws_db", schema="postgres")
@@ -35,7 +35,7 @@ def retrieve_summary():
     resp = http.run("summary")
 
     if http.check_response(resp):
-        raise AirflowException("COVID API summary endpoint returned bad resposne")
+        raise AirflowException("COVID API summary endpoint returned bad response")
 
     # Global case is separate from the Countries
     global_summary = resp.json()["Global"]
@@ -69,11 +69,11 @@ def retrieve_summary():
     # Establish database cursor
     cursor = rds_conn.cursor()
     # Insert all of the data into the covid_summary_data table
-    cursor.executemany("""
-        INSERT INTO covid_summary_data
-        (country, slug, new_confirmed, total_confirmed, new_deaths, total_deaths, new_recovered, total_recovered, date)
-        VALUES(%s, %s, %s, %s, %s, %s, %s, %s, %s)
-        """, tuple(data))
+    cursor.executemany(
+        "INSERT INTO " + kwargs["summary_table"] + "" \
+        "(country, slug, new_confirmed, total_confirmed, new_deaths, total_deaths, new_recovered, total_recovered, date)" \
+        "VALUES(%s, %s, %s, %s, %s, %s, %s, %s, %s)", tuple(data)
+    )
 
     rds_conn.commit()
     rds_conn.close()
@@ -82,6 +82,7 @@ def retrieve_summary():
 t1 = PythonOperator(
     task_id="summary_api_retrieval",
     python_callable=retrieve_summary,
+    op_kwargs={"summary_table": "covid_summary_data"},
     dag=dag
 )
 

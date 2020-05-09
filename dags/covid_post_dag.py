@@ -138,29 +138,31 @@ def country_cases(**kwargs):
             # Read the latest date that is stored in Airflow Variable
             from_date = Variable.get("last_date_found")
             to_date = date.today().strftime("%Y-%m-%d") + "T00:00:00Z"
-            print(to_date)
             # Create the endpoint that specifies range of dates
             endpoint = "country/" + country + "?from=" + from_date + "&to=" + to_date
             resp = http.run(endpoint)
 
-            cursor = rds_conn.cursor()
-            for case in resp.json():
-                country = case["Country"]
-                latitude = case["Lat"]
-                longitude = case["Lon"]
-                confirmed = case["Confirmed"]
-                deaths = case["Deaths"]
-                recovered = case["Recovered"]
-                active = case["Active"]
-                record_date = case["Date"][:10]
+            fields = [
+                "Country", "Lat", "Lon", "Confirmed", "Deaths", "Recovered", "Active"
+            ]
 
-                # Insert the information found into the country_cases table
-                cursor.execute("""
-                    INSERT INTO country_cases
-                    (country, latitude, longitude, confirmed, deaths, recovered, active_cases, record_date)
-                    VALUES(%s, %s, %s, %s, %s, %s, %s, %s)
-                    """, (country, latitude, longitude, confirmed, deaths, recovered, active, record_date))
-                rds_conn.commit()
+            data = []
+            for case in resp.json():
+                new_entry = []
+                # Add each field to the new_entry list
+                for field in fields:
+                    new_entry.append(case[field])
+                # Include the special case of Date
+                new_entry.append(case["Date"][:10])
+                data.append(tuple(new_entry))
+
+            # Insert the entries found into the country_cases table
+            cursor = rds_conn.cursor()
+            cursor.executemany(
+                "INSERT INTO " + kwargs["table_name"] + " " \
+                "(country, latitude, longitude, confirmed, deaths, recovered, active_cases, record_date)"
+                "VALUES(%s, %s, %s, %s, %s, %s, %s, %s)", tuple(data))
+            rds_conn.commit()
 
     rds_conn.close()
 
@@ -170,7 +172,7 @@ for i in range(0, int(Variable.get("country_splits"))):
     cases_task = PythonOperator(
         task_id="retrieve_country_cases" + str(i),
         python_callable=country_cases,
-        op_kwargs={ "file_num": str(i) },
+        op_kwargs={ "file_num": str(i), "table_name": "country_cases" },
         dag=dag
     )
 

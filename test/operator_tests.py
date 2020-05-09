@@ -13,9 +13,11 @@ from airflow.models.taskinstance import TaskInstance, clear_task_instances
 class TestPythonOperators(unittest.TestCase):
     def setUp(self):
         self.dag = DagBag().get_dag(dag_id='covid_dag')
+        self.db_hook = PostgresHook(postgres_conn_id="covid_aws_db", schema="postgres")
         if not os.path.isdir(os.getcwd() + '/staging'):
             os.mkdir(os.getcwd() + '/staging')
         warnings.simplefilter("ignore", ResourceWarning)
+
 
 
     def test_countries_retrieval_task(self):
@@ -48,8 +50,7 @@ class TestPythonOperators(unittest.TestCase):
         task.execute(task_instance.get_template_context())
 
         # Estblish connection to AWS RDS
-        aws_rds_hook = PostgresHook(postgres_conn_id="covid_aws_db", schema="postgres")
-        conn = aws_rds_hook.get_conn()
+        conn = self.db_hook.get_conn()
         cursor = conn.cursor()
 
         # Retrieve entries inserted into the database
@@ -60,6 +61,46 @@ class TestPythonOperators(unittest.TestCase):
         self.assertEqual(num_countries + 1, len(entries))
 
         cursor.execute("DELETE FROM test_covid_summary")
+        conn.commit()
+
+    def test_country_cases_task(self):
+        with open(os.getcwd() + "/staging/country_test.txt", "w+") as file:
+            file.write("sweden\nbelgium\ngermany")
+
+        # The tasks are created dynamically - the first one suffices for testing
+        # because they are all essentially the same
+        task = self.dag.get_task("retrieve_country_cases0")
+        print(task)
+        task.op_kwargs = {"filename": "country_test.txt", "table_name": "test_country_cases"}
+        current = datetime.datetime.now()
+        task_instance = TaskInstance(task=task, execution_date=current)
+        task.execute(task_instance.get_template_context())
+
+        conn = self.db_hook.get_conn()
+        cursor = conn.cursor()
+
+        # Retrieve the results that were added into the database
+        cursor.execute("SELECT DISTINCT country FROM test_country_cases ORDER BY country")
+        results = cursor.fetchall()
+
+        # Ensure that the correct entries were added
+        self.assertEqual(len(results), 3)
+        self.assertIn("Belgium", results[0])
+        self.assertIn("Germany", results[1])
+        self.assertIn("Sweden", results[2])
+
+        cursor.execute("SELECT MAX(record_date), MIN(record_date) FROM test_country_cases")
+        max_date, min_date = cursor.fetchone()
+
+        latest_date = Variable.get("last_date_found")
+        yesterday = datetime.date.today() - datetime.timedelta(days=1)
+        yesterday = yesterday.strftime("%Y-%m-%d")
+
+        self.assertEqual(latest_date, min_date.strftime("%Y-%m-%d"))
+        # The endpoints get updated every night - so maximum date will be yesterday
+        self.assertEqual(yesterday, max_date.strftime("%Y-%m-%d"))
+
+        cursor.execute("DELETE FROM test_country_cases")
         conn.commit()
 
 

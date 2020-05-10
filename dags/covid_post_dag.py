@@ -55,6 +55,7 @@ def retrieve_summary(**kwargs):
     ]
 
     data = []
+    print("YOOOOO", len(countries))
     for country in countries:
         new_entry = []
         # Iterate the fields to extract from the country dictionary
@@ -196,7 +197,7 @@ def set_latest_date(**kwargs):
 t4 = PythonOperator(
     task_id="set_latest_date",
     python_callable=set_latest_date,
-    opkwargs={"db": "country_cases"},
+    op_kwargs={"db": "country_cases"},
     dag=dag
 )
 

@@ -17,8 +17,13 @@ class TestPythonOperators(unittest.TestCase):
         if not os.path.isdir(os.getcwd() + '/staging'):
             os.mkdir(os.getcwd() + '/staging')
         warnings.simplefilter("ignore", ResourceWarning)
-
-
+        
+        conn = self.db_hook.get_conn()
+        # Remove all previous entries from the test tables
+        cursor = conn.cursor()
+        cursor.execute("DELETE FROM test_covid_summary")
+        cursor.execute("DELETE FROM test_country_cases")
+        conn.commit()
 
     def test_countries_retrieval_task(self):
         task = self.dag.get_task('country_api_retrieval')
@@ -38,9 +43,6 @@ class TestPythonOperators(unittest.TestCase):
 
 
     def test_summary_task(self):
-        # Determine number of countries from the /countries endpoint of the API
-        resp = requests.get("https://api.covid19api.com/countries")
-        num_countries = len(resp.json())
         task = self.dag.get_task('summary_api_retrieval')
         # Change the database to the testing one
         task.op_kwargs = {"summary_table": "test_covid_summary"}
@@ -57,11 +59,8 @@ class TestPythonOperators(unittest.TestCase):
         cursor.execute("SELECT * FROM test_covid_summary")
         entries = cursor.fetchall()
 
-        # Check that the number of countries + 1 (for global) were inserted into the db
-        self.assertEqual(num_countries + 1, len(entries))
-
-        cursor.execute("DELETE FROM test_covid_summary")
-        conn.commit()
+        # Check that there were entries added into the table
+        self.assertNotEqual(0, len(entries))
 
     def test_country_cases_task(self):
         with open(os.getcwd() + "/staging/country_test.txt", "w+") as file:
@@ -70,7 +69,6 @@ class TestPythonOperators(unittest.TestCase):
         # The tasks are created dynamically - the first one suffices for testing
         # because they are all essentially the same
         task = self.dag.get_task("retrieve_country_cases0")
-        print(task)
         task.op_kwargs = {"filename": "country_test.txt", "table_name": "test_country_cases"}
         current = datetime.datetime.now()
         task_instance = TaskInstance(task=task, execution_date=current)
@@ -99,8 +97,6 @@ class TestPythonOperators(unittest.TestCase):
         self.assertEqual(latest_date, min_date.strftime("%Y-%m-%d"))
         # The endpoints get updated every night - so maximum date will be yesterday
         self.assertEqual(yesterday, max_date.strftime("%Y-%m-%d"))
-
-        cursor.execute("DELETE FROM test_country_cases")
         conn.commit()
 
     def test_set_date_variable(self):
@@ -108,6 +104,8 @@ class TestPythonOperators(unittest.TestCase):
         conn = self.db_hook.get_conn()
         cursor = conn.cursor()
         curr_date = datetime.date.today().strftime("%Y-%m-%d")
+        # Remove any entries in case of all tests being run
+        cursor.execute("DELETE FROM test_country_cases")
         # Add in a date to the database so the task can fetch it and update
         # latest_date Variable
         cursor.execute("""
@@ -131,6 +129,8 @@ class TestPythonOperators(unittest.TestCase):
         Variable.set("last_date_found", stored_date)
         # The task should have set the variable to curr_date
         self.assertEqual(curr_date, new_date)
+
+        conn.commit()
 
 
     def tearDown(self):

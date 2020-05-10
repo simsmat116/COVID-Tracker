@@ -131,12 +131,12 @@ def country_cases(**kwargs):
     aws_rds_hook = PostgresHook(postgres_conn_id="covid_aws_db", schema="postgres")
     rds_conn = aws_rds_hook.get_conn()
 
-    with open("/staging/country" + kwargs["file_num"] + ".txt") as file:
+    with open(os.getcwd() + "/staging/" + kwargs["filename"]) as file:
         for line in file:
             country = line.rstrip("\n")
 
             # Read the latest date that is stored in Airflow Variable
-            from_date = Variable.get("last_date_found")
+            from_date = Variable.get("last_date_found") + "T00:00:00Z"
             to_date = date.today().strftime("%Y-%m-%d") + "T00:00:00Z"
             # Create the endpoint that specifies range of dates
             endpoint = "country/" + country + "?from=" + from_date + "&to=" + to_date
@@ -172,28 +172,31 @@ for i in range(0, int(Variable.get("country_splits"))):
     cases_task = PythonOperator(
         task_id="retrieve_country_cases" + str(i),
         python_callable=country_cases,
-        op_kwargs={ "file_num": str(i), "table_name": "country_cases" },
+        op_kwargs={
+            "filename": "country" + str(i) + ".txt",
+            "table_name": "country_cases"
+        },
         dag=dag
     )
 
     parallel_tasks.append(cases_task)
 
 
-def set_latest_date():
+def set_latest_date(**kwargs):
     # Establish connection to AWS database
     aws_rds_hook = PostgresHook(postgres_conn_id="covid_aws_db", schema="postgres")
     rds_conn = aws_rds_hook.get_conn()
     cursor = rds_conn.cursor()
     # Query the latest record inserted and find its date
-    cursor.execute("SELECT record_date FROM country_cases ORDER BY record_date DESC LIMIT 1")
+    cursor.execute("SELECT record_date FROM " + kwargs["db"] + " ORDER BY record_date DESC LIMIT 1")
     result = cursor.fetchone()
     # Set the airflow variable to be used in next process
-    print(result[0].strftime('%Y-%m-%d'))
     Variable.set('last_date_found', result[0].strftime('%Y-%m-%d'))
 
 t4 = PythonOperator(
     task_id="set_latest_date",
     python_callable=set_latest_date,
+    opkwargs={"db": "country_cases"},
     dag=dag
 )
 

@@ -103,6 +103,35 @@ class TestPythonOperators(unittest.TestCase):
         cursor.execute("DELETE FROM test_country_cases")
         conn.commit()
 
+    def test_set_date_variable(self):
+        # Establish connection to db
+        conn = self.db_hook.get_conn()
+        cursor = conn.cursor()
+        curr_date = datetime.date.today().strftime("%Y-%m-%d")
+        # Add in a date to the database so the task can fetch it and update
+        # latest_date Variable
+        cursor.execute("""
+            INSERT INTO test_country_cases (record_date)
+            VALUES(%s)""", (curr_date,))
+
+        conn.commit()
+
+        # Get the currently stored date so we can reset it after the test
+        stored_date = Variable.get("last_date_found")
+
+        task = self.dag.get_task("set_latest_date")
+        task.op_kwargs = {"db": "test_country_cases"}
+        current = datetime.datetime.now()
+        task_instance = TaskInstance(task=task, execution_date=current)
+        task.execute(task_instance.get_template_context())
+
+        # Get the newest value stored
+        new_date = Variable.get("last_date_found")
+        # Reset the variable to its previous value
+        Variable.set("last_date_found", stored_date)
+        # The task should have set the variable to curr_date
+        self.assertEqual(curr_date, new_date)
+
 
     def tearDown(self):
         if os.path.isdir(os.getcwd() + '/staging'):

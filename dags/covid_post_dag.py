@@ -143,26 +143,43 @@ def country_cases(**kwargs):
             resp = http.run(endpoint)
 
             fields = [
-                "Country", "Province", "City", "Lat", "Lon", "Confirmed", "Deaths", "Recovered", "Active"
+                "Country", "Province", "Confirmed", "Deaths", "Recovered", "Active"
             ]
 
-            data = []
+            # Dictionary for storing dates that map to dictionary of province results
+            data = {}
             for case in resp.json():
-                new_entry = []
-                # Add each field to the new_entry list
-                for field in fields:
-                    new_entry.append(case[field])
+                record_date = case["Date"][:10]
+                if record_date not in data:
+                    data[record_date] = {}
 
-                # Include the special case of Date
-                new_entry.append(case["Date"][:10])
-                data.append(tuple(new_entry))
+                province = case["Province"] if case["Province"] else "CTRY"
+                # Storing the counts in a list to make adding info into dictionary easier
+                counts = [case["Confirmed"], case["Deaths"], case["Recovered"], case["Active"]]
+                if province not in data[record_date]:
+                    data[record_date][province] = counts
+                else:
+                    for i in range(4):
+                        data[record_date][province][i] += counts[i]
+
+            db_data = []
+            for record_date, province_data in data.items():
+                for province, counts in province_data.items():
+                    new_entry = [resp.json()[0]["Country"], province]
+                    new_entry.extend(counts)
+                    new_entry.append(record_date)
+                    db_data.append(new_entry)
+
 
             # Insert the entries found into the country_cases table
             cursor = rds_conn.cursor()
             cursor.executemany(
                 "INSERT INTO " + kwargs["table_name"] + " " \
-                "(country, province, city, latitude, longitude, confirmed, deaths, recovered, active_cases, record_date)" \
-                "VALUES(%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)", tuple(data))
+                "(country, province, confirmed, deaths, recovered, active_cases, record_date) " \
+                "VALUES(%s, %s, %s, %s, %s, %s, %s)", tuple(db_data))
+
+
+
             rds_conn.commit()
 
     rds_conn.close()

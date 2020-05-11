@@ -97,7 +97,7 @@ class TestPythonOperators(unittest.TestCase):
         self.assertEqual(latest_date, min_date.strftime("%Y-%m-%d"))
         # The endpoints get updated every night - so maximum date will be yesterday
         self.assertEqual(yesterday, max_date.strftime("%Y-%m-%d"))
-        conn.commit()
+
 
     def test_set_date_variable(self):
         # Establish connection to db
@@ -109,8 +109,8 @@ class TestPythonOperators(unittest.TestCase):
         # Add in a date to the database so the task can fetch it and update
         # latest_date Variable
         cursor.execute("""
-            INSERT INTO test_country_cases (country, province, city, record_date)
-            VALUES(%s, %s, %s, %s)""", ("United States", "Michigan", "Ann Arbor", curr_date,))
+            INSERT INTO test_country_cases (country, province, record_date)
+            VALUES(%s, %s, %s)""", ("United States", "Michigan", curr_date,))
 
         conn.commit()
 

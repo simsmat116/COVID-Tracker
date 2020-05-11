@@ -17,7 +17,7 @@ class TestPythonOperators(unittest.TestCase):
         if not os.path.isdir(os.getcwd() + '/staging'):
             os.mkdir(os.getcwd() + '/staging')
         warnings.simplefilter("ignore", ResourceWarning)
-        
+
         conn = self.db_hook.get_conn()
         # Remove all previous entries from the test tables
         cursor = conn.cursor()
@@ -109,8 +109,8 @@ class TestPythonOperators(unittest.TestCase):
         # Add in a date to the database so the task can fetch it and update
         # latest_date Variable
         cursor.execute("""
-            INSERT INTO test_country_cases (record_date)
-            VALUES(%s)""", (curr_date,))
+            INSERT INTO test_country_cases (country, province, city, record_date)
+            VALUES(%s, %s, %s, %s)""", ("United States", "Michigan", "Ann Arbor", curr_date,))
 
         conn.commit()
 

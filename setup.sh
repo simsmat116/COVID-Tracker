@@ -12,3 +12,4 @@ fi
 
 # Set the airflow home variable
 export AIRFLOW_HOME="$(pwd)/env/lib/python3.7/site-packages/airflow"
+echo $AIRFLOW_HOME

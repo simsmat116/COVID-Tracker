@@ -55,7 +55,6 @@ def retrieve_summary(**kwargs):
     ]
 
     data = []
-    print("YOOOOO", len(countries))
     for country in countries:
         new_entry = []
         # Iterate the fields to extract from the country dictionary
@@ -167,8 +166,6 @@ def country_cases(**kwargs):
             rds_conn.commit()
 
     rds_conn.close()
-
-country_cases(filename="country0.txt", table_name="country_cases")
 
 parallel_tasks = []
 for i in range(0, int(Variable.get("country_splits"))):

@@ -144,7 +144,7 @@ def country_cases(**kwargs):
             resp = http.run(endpoint)
 
             fields = [
-                "Country", "Lat", "Lon", "Confirmed", "Deaths", "Recovered", "Active"
+                "Country", "Province", "City", "Lat", "Lon", "Confirmed", "Deaths", "Recovered", "Active"
             ]
 
             data = []
@@ -153,6 +153,7 @@ def country_cases(**kwargs):
                 # Add each field to the new_entry list
                 for field in fields:
                     new_entry.append(case[field])
+
                 # Include the special case of Date
                 new_entry.append(case["Date"][:10])
                 data.append(tuple(new_entry))
@@ -161,12 +162,13 @@ def country_cases(**kwargs):
             cursor = rds_conn.cursor()
             cursor.executemany(
                 "INSERT INTO " + kwargs["table_name"] + " " \
-                "(country, latitude, longitude, confirmed, deaths, recovered, active_cases, record_date)"
-                "VALUES(%s, %s, %s, %s, %s, %s, %s, %s)", tuple(data))
+                "(country, province, city, latitude, longitude, confirmed, deaths, recovered, active_cases, record_date)" \
+                "VALUES(%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)", tuple(data))
             rds_conn.commit()
 
     rds_conn.close()
 
+country_cases(filename="country0.txt", table_name="country_cases")
 
 parallel_tasks = []
 for i in range(0, int(Variable.get("country_splits"))):
@@ -201,5 +203,6 @@ t4 = PythonOperator(
     dag=dag
 )
 
-t1
-t2 >> parallel_tasks >> t4
+
+#t1
+#t2 >> parallel_tasks >> t4

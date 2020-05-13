@@ -14,8 +14,8 @@ class TestPythonOperators(unittest.TestCase):
     def setUp(self):
         self.dag = DagBag().get_dag(dag_id='covid_dag')
         self.db_hook = PostgresHook(postgres_conn_id="covid_aws_db", schema="postgres")
-        if not os.path.isdir(os.getcwd() + '/staging'):
-            os.mkdir(os.getcwd() + '/staging')
+        if not os.path.isdir(os.getcwd() + '/test/staging'):
+            os.mkdir(os.getcwd() + '/test/staging')
         warnings.simplefilter("ignore", ResourceWarning)
 
         conn = self.db_hook.get_conn()
@@ -27,6 +27,7 @@ class TestPythonOperators(unittest.TestCase):
 
     def test_countries_retrieval_task(self):
         task = self.dag.get_task('country_api_retrieval')
+        task.op_kwargs = {"path": "/test/staging/"}
         current = datetime.datetime.now()
         task_instance = TaskInstance(task=task, execution_date=current)
         # Execute the countries task
@@ -36,7 +37,7 @@ class TestPythonOperators(unittest.TestCase):
 
         # Iterate number of files supposed to be created to ensure they exist
         for i in range(num_files):
-            with open(os.getcwd() + "/staging/country" + str(i) + ".txt") as file:
+            with open(os.getcwd() + "/test/staging/country" + str(i) + ".txt") as file:
                 first_line = file.readline()
                 # Ensure that the line is not blank
                 self.assertNotEqual(first_line, "")
@@ -63,13 +64,13 @@ class TestPythonOperators(unittest.TestCase):
         self.assertNotEqual(0, len(entries))
 
     def test_country_cases_task(self):
-        with open(os.getcwd() + "/staging/country_test.txt", "w+") as file:
+        with open(os.getcwd() + "/test/staging/country_test.txt", "w+") as file:
             file.write("sweden\nbelgium\ngermany")
 
         # The tasks are created dynamically - the first one suffices for testing
         # because they are all essentially the same
         task = self.dag.get_task("retrieve_country_cases0")
-        task.op_kwargs = {"filename": "country_test.txt", "table_name": "test_country_cases"}
+        task.op_kwargs = {"path": "/test/staging/", "filename": "country_test.txt", "table_name": "test_country_cases"}
         current = datetime.datetime.now()
         task_instance = TaskInstance(task=task, execution_date=current)
         task.execute(task_instance.get_template_context())
@@ -134,5 +135,6 @@ class TestPythonOperators(unittest.TestCase):
 
 
     def tearDown(self):
-        if os.path.isdir(os.getcwd() + '/staging'):
-            shutil.rmtree(os.getcwd() + '/staging')
+        pass
+        #if os.path.isdir(os.getcwd() + '/test/staging'):
+        #    shutil.rmtree(os.getcwd() + '/test/staging')

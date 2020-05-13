@@ -22,7 +22,7 @@ args = {
 dag = DAG(
     dag_id="covid_dag",
     default_args=args,
-    schedule_interval=timedelta(days=1)
+    schedule_interval=None
 )
 
 
@@ -87,7 +87,7 @@ t1 = PythonOperator(
 )
 
 
-def retrieve_countries():
+def retrieve_countries(**kwargs):
     # Setup a hook to the API endpoint
     http = HttpHook(method='GET', http_conn_id="covid_api")
     # Send request to the countries endpoint
@@ -106,11 +106,11 @@ def retrieve_countries():
         file_num = index // block_size
 
         # Erase contents of the existing file
-        with open(os.getcwd() + "/staging/country" + str(file_num) + ".txt", "w"):
+        with open(os.getcwd() + kwargs["path"] + "country" + str(file_num) + ".txt", "w"):
             pass
 
         # Placing the appropriate date into the file
-        with open(os.getcwd() + "/staging/country" + str(file_num) + ".txt", "a") as file:
+        with open(os.getcwd() + kwargs["path"] + "country" + str(file_num) + ".txt", "a") as file:
             # Iterate the current block of countries
             for country in countries[index:min(index+block_size, len(countries))]:
                 file.write(country["Slug"] + "\n")
@@ -121,6 +121,7 @@ def retrieve_countries():
 t2 = PythonOperator(
     task_id="country_api_retrieval",
     python_callable=retrieve_countries,
+    op_kwargs={"path": "/dags/staging/" },
     dag=dag
 )
 
@@ -131,7 +132,7 @@ def country_cases(**kwargs):
     aws_rds_hook = PostgresHook(postgres_conn_id="covid_aws_db", schema="postgres")
     rds_conn = aws_rds_hook.get_conn()
 
-    with open(os.getcwd() + "/staging/" + kwargs["filename"]) as file:
+    with open(os.getcwd() + kwargs["path"] + kwargs["filename"]) as file:
         for line in file:
             country = line.rstrip("\n")
 
@@ -178,8 +179,6 @@ def country_cases(**kwargs):
                 "(country, province, confirmed, deaths, recovered, active_cases, record_date) " \
                 "VALUES(%s, %s, %s, %s, %s, %s, %s)", tuple(db_data))
 
-
-
             rds_conn.commit()
 
     rds_conn.close()
@@ -190,6 +189,7 @@ for i in range(0, int(Variable.get("country_splits"))):
         task_id="retrieve_country_cases" + str(i),
         python_callable=country_cases,
         op_kwargs={
+            "path": "/dags/staging/",
             "filename": "country" + str(i) + ".txt",
             "table_name": "country_cases"
         },
@@ -218,5 +218,4 @@ t4 = PythonOperator(
 )
 
 
-#t1
-#t2 >> parallel_tasks >> t4
+t1 >> t2 >> parallel_tasks >> t4

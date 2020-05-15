@@ -106,7 +106,7 @@ def retrieve_countries(**kwargs):
         file_num = index // block_size
 
         # Erase contents of the existing file
-        with open(os.getcwd() + kwargs["path"] + "country" + str(file_num) + ".txt", "w"):
+        with open(os.getcwd() + kwargs["path"] + "country" + str(file_num) + ".txt", "w+"):
             pass
 
         # Placing the appropriate date into the file

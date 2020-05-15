@@ -101,6 +101,9 @@ celerybeat.pid
 # SageMath parsed files
 *.sage.py
 
+# AWS Key Pair
+covid-tracker.pem
+
 # Environments
 .env
 .venv

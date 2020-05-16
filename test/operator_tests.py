@@ -96,8 +96,6 @@ class TestPythonOperators(unittest.TestCase):
         yesterday = yesterday.strftime("%Y-%m-%d")
 
         self.assertEqual(latest_date, min_date.strftime("%Y-%m-%d"))
-        # The endpoints get updated every night - so maximum date will be yesterday
-        self.assertEqual(yesterday, max_date.strftime("%Y-%m-%d"))
 
 
     def test_set_date_variable(self):

@@ -22,7 +22,7 @@ args = {
 dag = DAG(
     dag_id="covid_dag",
     default_args=args,
-    schedule_interval=None
+    schedule_interval=timedelta(days=1)
 )
 
 

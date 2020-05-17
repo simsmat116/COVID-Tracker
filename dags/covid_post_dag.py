@@ -177,7 +177,8 @@ def country_cases(**kwargs):
             cursor.executemany(
                 "INSERT INTO " + kwargs["table_name"] + " " \
                 "(country, province, confirmed, deaths, recovered, active_cases, record_date) " \
-                "VALUES(%s, %s, %s, %s, %s, %s, %s)", tuple(db_data))
+                "VALUES(%s, %s, %s, %s, %s, %s, %s)" \
+                "ON CONFLICT (country, province, record_date) DO NOTHING", tuple(db_data))
 
             rds_conn.commit()
 

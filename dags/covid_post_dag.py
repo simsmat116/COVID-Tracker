@@ -106,11 +106,11 @@ def retrieve_countries(**kwargs):
         file_num = index // block_size
 
         # Erase contents of the existing file
-        with open(os.getcwd() + kwargs["path"] + "country" + str(file_num) + ".txt", "w+"):
+        with open(os.path.join(os.getcwd(), kwargs["path"], "country" + str(file_num) + ".txt", "a")):
             pass
 
         # Placing the appropriate date into the file
-        with open(os.getcwd() + kwargs["path"] + "country" + str(file_num) + ".txt", "a") as file:
+        with open(os.path.join(os.getcwd(), kwargs["path"], "country" + str(file_num) + ".txt", "a")) as file:
             # Iterate the current block of countries
             for country in countries[index:min(index+block_size, len(countries))]:
                 file.write(country["Slug"] + "\n")
@@ -132,7 +132,7 @@ def country_cases(**kwargs):
     aws_rds_hook = PostgresHook(postgres_conn_id="covid_aws_db", schema="postgres")
     rds_conn = aws_rds_hook.get_conn()
 
-    with open(os.getcwd() + kwargs["path"] + kwargs["filename"]) as file:
+    with open(os.path.join(os.getcwd(), kwargs["path"], kwargs["filename"])) as file:
         for line in file:
             country = line.rstrip("\n")
 

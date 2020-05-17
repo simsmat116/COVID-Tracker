@@ -106,11 +106,11 @@ def retrieve_countries(**kwargs):
         file_num = index // block_size
 
         # Erase contents of the existing file
-        with open(os.path.join(os.getcwd(), kwargs["path"], "country" + str(file_num) + ".txt", "a")):
+        with open(os.path.join(os.getcwd(), kwargs["path"], "country" + str(file_num) + ".txt"), "a"):
             pass
 
         # Placing the appropriate date into the file
-        with open(os.path.join(os.getcwd(), kwargs["path"], "country" + str(file_num) + ".txt", "a")) as file:
+        with open(os.path.join(os.getcwd(), kwargs["path"], "country" + str(file_num) + ".txt"), "a") as file:
             # Iterate the current block of countries
             for country in countries[index:min(index+block_size, len(countries))]:
                 file.write(country["Slug"] + "\n")

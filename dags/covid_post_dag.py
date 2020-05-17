@@ -12,7 +12,7 @@ from airflow.exceptions import AirflowException
 args = {
     'owner': 'simsmat',
     'depends_on_past': False,
-    'start_date': days_ago(2),
+    'start_date': datetime(2020, 5, 16),
     'email': ['simsmat11697@gmail.com'],
     'email_on_failure': True,
     'retries': 2,

@@ -64,7 +64,7 @@ class TestPythonOperators(unittest.TestCase):
         self.assertNotEqual(0, len(entries))
 
     def test_country_cases_task(self):
-        with open(os.getcwd() + "/test/staging/country_test.txt", "w+") as file:
+        with open("/home/ubuntu/COVID-Tracker/test/staging/country_test.txt", "w+") as file:
             file.write("sweden\nbelgium\ngermany")
 
         # The tasks are created dynamically - the first one suffices for testing

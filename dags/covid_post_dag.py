@@ -72,8 +72,8 @@ def retrieve_summary(**kwargs):
     cursor.executemany(
         "INSERT INTO " + kwargs["summary_table"] + "" \
         "(country, slug, new_confirmed, total_confirmed, new_deaths, total_deaths, new_recovered, total_recovered, date)" \
-        "VALUES(%s, %s, %s, %s, %s, %s, %s, %s, %s)" \
-        "ON CONFLICT (coutry, date) DO NOTHING", tuple(data)
+        "VALUES(%s, %s, %s, %s, %s, %s, %s, %s, %s) " \
+        "ON CONFLICT (country, date) DO NOTHING", tuple(data)
     )
 
     rds_conn.commit()
